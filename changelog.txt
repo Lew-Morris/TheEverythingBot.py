@@ -1,0 +1,14 @@
+CHANGELOG
+
+Created - 09/02/2022
+Edit:
+  Date: 09/02/2022
+  Edited by:  Lewis
+  Summary of changes:
+    - Added depth to ideas
+    - changed my_secret = os.environ['DISCORD_KEY'] -> client.run(os.getenv("DISCORD_KEY")) 
+    - removed 'my_secret = os.environ['CLIENT_SECRET']'
+    - added more comments
+    - moved TODO to the top of main.py
+    - changed TODO to comment block instead of many single line comments
+    - fixed issue with the bot's token not being correct
