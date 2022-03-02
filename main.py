@@ -45,7 +45,7 @@ CORE OBJECTIVES
   - Name of the channel, for e.g. is 'User Count: 197'
     - This number can be found with this - https://discordpy.readthedocs.io/en/stable/api.html?highlight=guild%20members#discord.Guild.member_count
     - Note that this requires the permission of 'Intents.members'
-  
+
 * Twitter updates
   - Allow the bot to automatically update a channel with a message linking a recent tweet
   - Provide a list of accounts for the bot to automatically gather recent tweets from
@@ -77,6 +77,7 @@ import os
 import youtube_dl
 
 ##imports discord.py libs
+import numpy as np
 import discord
 import discord.ext
 from discord import FFmpegPCMAudio
@@ -87,13 +88,31 @@ import flask #Not needed if keep_alive method is not used
 
 #Going to need persisten storage for this - sql db?
 customPrefixes = {}
-defaultPrefix = ['>']
+defaultPrefix = ['!']
 #Starts the discord client
 bot = discord.Client()
 #Sets bot's prefix to ! - command should be made to change command_prefix
 bot = commands.Bot(command_prefix = defaultPrefix)
 
 ###BOT COMMANDS GO HERE###
+
+###
+#def readFile(bannedWords):
+   #     fileObject = open(bannedWords.txt, "r") #opens the file in read mode
+  #      bannedWords = fileObject.read().splitlines() #puts the file into an array
+ #       fileObject.close()
+#         return words
+#
+
+#reading a text file containing the banned words
+
+
+my_file = open("bannedWords.txt", "r")
+content = my_file.read()
+#print(content)
+content_list = content.split(", ")
+my_file.close()
+print(content_list)
 
 #This is a skeleton to send a message
 @bot.event
@@ -106,18 +125,18 @@ async def on_ready():
 async def on_message(message):
   if message.author == bot.user:
     return
-  #text filters added, can create curse list, add more where appropriate
+    
   msg_content = message.content.lower()
-  bannedWords = ['lost ark', 'curse2']
-  if any(word in msg_content for word in bannedWords):
+  test = fileWords.copy()
+  #test = fileWords
+  if any(word in msg_content for word in test ):
     await message.delete()
-    # await message.channel.send ('User: ' + message.author.mention + ', the phrase ||"' + message.content + '"|| is banned!')
+    #await message.channel.send ('User: ' + message.author.mention + ', the phrase ||"' + message.content + '"|| is banned!')
 
-    # Better to do this way with printf - easier to read 
     await message.channel.send(f'User: {message.author.mention}, the phrase || {message.content}|| is a banned phrase')
     await message.channel.send ('_ _')
 
-  await bot.process_commands(message)
+#  await bot.process_commands(message)
 
 # Commands weren't working, added "await bot.process_commands(message)" which fixed the issue
 # may want to change to bitly link
@@ -159,40 +178,124 @@ async def flip(ctx):
   await ctx.send(result)
 
 
-async def getPrefix(bot, message):
-  guild = message.guild
-  #Only allow custom prefixes in guilds
-  if guild:
-    return customPrefixes.get(guild.id, defaultPrefixes)
-  else:
-    return defaultPrefixes
-
-
-## NEEDS WORK 
-
-    
-# @bot.commands()
-# @commands.guild_only()
-# async def setPrefix(self, ctx, prefixes=""):
-#   #error checking
-#   if len(prefixes) == 0:
-#     await ctx.send("Error: You need to provide a prefix, dummy")
-#   elif len(prefixes) > 5:
-#     raise RuntimeError('Cannot have more than 5 custom prefixes.')
-#   else:
-#     await self.prefixes.put(guild.id, prefixes, reverse = True)
-#   #Case for prefix not being passed
-#   try:
-#     #try smth
-#     customPrefixes[ctx.guild.id] = prefixes.split() or defaultPrefixes
-#   except Exception:
-#     print(f'Exception: {Exception} occured!')
-
-#   await ctx.send(f'Prefix was set to: {prefix}')
-    
-
 ##YOUTUBE MUSIC##
+# Suppress noise about console usage from errors
+youtube_dl.utils.bug_reports_message = lambda: ''
 
+
+ytdl_format_options = {
+    'format': 'bestaudio/best',
+    'outtmpl': '%(extractor)s-%(id)s-%(title)s.%(ext)s',
+    'restrictfilenames': True,
+    'noplaylist': True,
+    'nocheckcertificate': True,
+    'ignoreerrors': False,
+    'logtostderr': False,
+    'quiet': True,
+    'no_warnings': True,
+    'default_search': 'auto',
+    'source_address': '0.0.0.0' # bind to ipv4 since ipv6 addresses cause issues sometimes
+}
+
+ffmpeg_options = {
+    'options': '-vn'
+}
+
+ytdl = youtube_dl.YoutubeDL(ytdl_format_options)
+
+
+class YTDLSource(discord.PCMVolumeTransformer):
+    def __init__(self, source, *, data, volume=0.5):
+        super().__init__(source, volume)
+
+        self.data = data
+
+        self.title = data.get('title')
+        self.url = data.get('url')
+
+    @classmethod
+    async def from_url(cls, url, *, loop=None, stream=False):
+        loop = loop or asyncio.get_event_loop()
+        data = await loop.run_in_executor(None, lambda: ytdl.extract_info(url, download=not stream))
+
+        if 'entries' in data:
+            # take first item from a playlist
+            data = data['entries'][0]
+
+        filename = data['url'] if stream else ytdl.prepare_filename(data)
+        return cls(discord.FFmpegPCMAudio(filename, **ffmpeg_options), data=data)
+
+
+class Music(commands.Cog):
+    def __init__(self, bot):
+        self.bot = bot
+
+    @bot.command()
+    async def join(self, ctx, *, channel: discord.VoiceChannel):
+        """Joins a voice channel"""
+
+        if ctx.voice_client is not None:
+            return await ctx.voice_client.move_to(channel)
+
+        await channel.connect()
+
+    @bot.command()
+    async def play(self, ctx, *, query):
+        """Plays a file from the local filesystem"""
+
+        source = discord.PCMVolumeTransformer(discord.FFmpegPCMAudio(query))
+        ctx.voice_client.play(source, after=lambda e: print(f'Player error: {e}') if e else None)
+
+        await ctx.send(f'Now playing: {query}')
+
+    @bot.command()
+    async def yt(self, ctx, *, url):
+        """Plays from a url (almost anything youtube_dl supports)"""
+
+        async with ctx.typing():
+            player = await YTDLSource.from_url(url, loop=self.bot.loop)
+            ctx.voice_client.play(player, after=lambda e: print(f'Player error: {e}') if e else None)
+
+        await ctx.send(f'Now playing: {player.title}')
+
+    @bot.command()
+    async def stream(self, ctx, *, url):
+        """Streams from a url (same as yt, but doesn't predownload)"""
+
+        async with ctx.typing():
+            player = await YTDLSource.from_url(url, loop=self.bot.loop, stream=True)
+            ctx.voice_client.play(player, after=lambda e: print(f'Player error: {e}') if e else None)
+
+        await ctx.send(f'Now playing: {player.title}')
+
+    @bot.command()
+    async def volume(self, ctx, volume: int):
+        """Changes the player's volume"""
+
+        if ctx.voice_client is None:
+            return await ctx.send("Not connected to a voice channel.")
+
+        ctx.voice_client.source.volume = volume / 100
+        await ctx.send(f"Changed volume to {volume}%")
+
+    @bot.command()
+    async def stop(self, ctx):
+        """Stops and disconnects the bot from voice"""
+
+        await ctx.voice_client.disconnect()
+
+    @play.before_invoke
+    @yt.before_invoke
+    @stream.before_invoke
+    async def ensure_voice(self, ctx):
+        if ctx.voice_client is None:
+            if ctx.author.voice:
+                await ctx.author.voice.channel.connect()
+            else:
+                await ctx.send("You are not connected to a voice channel.")
+                raise commands.CommandError("Author not connected to a voice channel.")
+        elif ctx.voice_client.is_playing():
+            ctx.voice_client.stop() 
 
 #Gets the bot's key from the environment variable
 #Note - make sure to mention this is so we can keep code open source without issues of security
