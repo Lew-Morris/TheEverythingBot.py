@@ -107,12 +107,10 @@ bot = commands.Bot(command_prefix = defaultPrefix)
 #reading a text file containing the banned words
 
 
-my_file = open("bannedWords.txt", "r")
-content = my_file.read()
-#print(content)
-content_list = content.split(", ")
-my_file.close()
-print(content_list)
+bannedWordsFile = open("bannedWords.txt", "r")
+content = bannedWordsFile.read()
+bannedWords = content.split(", ")
+bannedWordsFile.close()
 
 #This is a skeleton to send a message
 @bot.event
@@ -127,14 +125,14 @@ async def on_message(message):
     return
     
   msg_content = message.content.lower()
-  test = fileWords.copy()
   #test = fileWords
-  if any(word in msg_content for word in test ):
+  if any(word in msg_content for word in bannedWords ):
     await message.delete()
     #await message.channel.send ('User: ' + message.author.mention + ', the phrase ||"' + message.content + '"|| is banned!')
 
-    await message.channel.send(f'User: {message.author.mention}, the phrase || {message.content}|| is a banned phrase')
-    await message.channel.send ('_ _')
+    await message.channel.send(f'User: {message.author.mention}, the phrase || {message.content}|| is banned')
+    #below can be used if you want a empty line after bots message
+    #await message.channel.send ('_ _')
 
 #  await bot.process_commands(message)
 
