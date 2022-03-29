@@ -127,7 +127,7 @@ async def place_error(ctx, error):
         await ctx.send("Make sure to enter an integer.")
 
 # Token - this does not need to be here 
-#bot.run(os.getenv("DISCORD_KEY"))
+bot.run(os.getenv("DISCORD_KEY"))
     
 
 
