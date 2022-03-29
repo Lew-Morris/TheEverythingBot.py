@@ -1,80 +1,7 @@
-''' 
-#TODO
-
-CORE OBJECTIVES
-----------------
-* Youtube/ Spotify Music playback
-  - Uses YTDL library
-  - To improve responsiveness/ save downloading every video, use this - https://stackoverflow.com/a/62672753
-  - https://stackoverflow.com/questions/66610012/discord-py-streaming-youtube-live-into-voice
-* Moderation
-  Text Filters/ general filters
-  Activity loggers
-  Black/whitelist
-
-* Points System - Every member starts with 100 points - likely to change to 1000, depending on group decision about points economy
-  Admin permissions
-    !setpoints - !setpoints 1000
-    !pointsadd - !pointsadd @{username} (-)1000
-  General permissions
-    !points {username} - replies with number of points of user, or points   of author if not specified
-      - Conditions -> User must be in guildlist
-    !give {username} all - transfers points to another user. E.g. 100 - user must have sufficient points which will be deducted from their balance
-      - Conditions of give command -> (pointsToGive > 0 | pointsToGive <= author.getBalance())
-  - For all of these commands, the bot should check if member is present in the server -> - get_member_named(name)
-
-* GAMES
-  Wordle? - allow changes such as more letters
-  TTT - !ttt @{username} {points}? - Example: !ttt @Lew#0062 100
-  Battlships - !battleships @{username}
-    !bs as alias command
-  Minesweeper - !minesweeper
-    !ms as alias command
-  Chess - !chess @{username} {points}?
-  Connect4 - !connect4
-
-* Gamba (Gambling)
-  Slots - !slots {points}
-  Dice roll - !dice {points} {guess (<5, 2, [2,2,1]))} ✅ - need to add points to this cmd
-    [2,2,1] is multiple rolls, one after the other - has to output pattern [2,2,1] to win 
-      Append results of 3 dice rolls to array and check against guess
-  Roulette - !roulette {points} {bet-conditions (R/B/Number)}
-
-* Member Count channel
-  - Private voice channels which are visible to all users, but only admins are able to join
-  - Name of the channel, for e.g. is 'User Count: 197'
-    - This number can be found with this - https://discordpy.readthedocs.io/en/stable/api.html?highlight=guild%20members#discord.Guild.member_count
-    - Note that this requires the permission of 'Intents.members'
-
-* Twitter updates
-  - Allow the bot to automatically update a channel with a message linking a recent tweet
-  - Provide a list of accounts for the bot to automatically gather recent tweets from
-  -https://www.youtube.com/watch?v=KmzHmwTk2DI&ab_channel=JyroneParker
-
-DESIRABLE OBJECTIVES
-----------------
-* Website to host dashboard - most likely HTML/JS/PHP
-* Allow the bot to play against players if no username is specified
-* Create a channel with permissions allowing people playing a game to have a private channel
-  - Allow others to spectate - permission to see channel but not type
-    Do this through reactions with :eye: or :eyes:
-
-* Storing User Points
-  - Stored in DB for each guild (server) as a user may share multiple servers with bot
-
-* FUN CMDS - add literally anything to this, can be random asf
-  
-
-** ASPIRATIONAL OBJECTIVES **
-* Bot can play chess against user
-* Paid tier for users through Patreon allowing certain 'premium' features
-  - 24/7 voice activity - very easy to do
-  - Add filters to music such as nightcore or bass boost
-'''
-
 import random
 import os
 import youtube_dl
+import asyncio
 
 ##imports discord.py libs
 import numpy as np
@@ -88,11 +15,11 @@ import flask #Not needed if keep_alive method is not used
 
 #Going to need persisten storage for this - sql db?
 customPrefixes = {}
-defaultPrefix = ['!']
+#defaultPrefix = ['#']
 #Starts the discord client
 bot = discord.Client()
 #Sets bot's prefix to ! - command should be made to change command_prefix
-bot = commands.Bot(command_prefix = defaultPrefix)
+bot = commands.Bot(command_prefix = '!')
 
 ###BOT COMMANDS GO HERE###
 
@@ -101,11 +28,10 @@ bot = commands.Bot(command_prefix = defaultPrefix)
    #     fileObject = open(bannedWords.txt, "r") #opens the file in read mode
   #      bannedWords = fileObject.read().splitlines() #puts the file into an array
  #       fileObject.close()
-#         return words
+#        return words
 #
 
 #reading a text file containing the banned words
-
 
 bannedWordsFile = open("bannedWords.txt", "r")
 content = bannedWordsFile.read()
@@ -176,124 +102,124 @@ async def flip(ctx):
   await ctx.send(result)
 
 
-##YOUTUBE MUSIC##
-# Suppress noise about console usage from errors
-youtube_dl.utils.bug_reports_message = lambda: ''
+# ##YOUTUBE MUSIC##
+# # Suppress noise about console usage from errors
+# youtube_dl.utils.bug_reports_message = lambda: ''
 
 
-ytdl_format_options = {
-    'format': 'bestaudio/best',
-    'outtmpl': '%(extractor)s-%(id)s-%(title)s.%(ext)s',
-    'restrictfilenames': True,
-    'noplaylist': True,
-    'nocheckcertificate': True,
-    'ignoreerrors': False,
-    'logtostderr': False,
-    'quiet': True,
-    'no_warnings': True,
-    'default_search': 'auto',
-    'source_address': '0.0.0.0' # bind to ipv4 since ipv6 addresses cause issues sometimes
-}
+# ytdl_format_options = {
+#     'format': 'bestaudio/best',
+#     'outtmpl': '%(extractor)s-%(id)s-%(title)s.%(ext)s',
+#     'restrictfilenames': True,
+#     'noplaylist': True,
+#     'nocheckcertificate': True,
+#     'ignoreerrors': False,
+#     'logtostderr': False,
+#     'quiet': True,
+#     'no_warnings': True,
+#     'default_search': 'auto',
+#     'source_address': '0.0.0.0' # bind to ipv4 since ipv6 addresses cause issues sometimes
+# }
 
-ffmpeg_options = {
-    'options': '-vn'
-}
+# ffmpeg_options = {
+#     'options': '-vn'
+# }
 
-ytdl = youtube_dl.YoutubeDL(ytdl_format_options)
-
-
-class YTDLSource(discord.PCMVolumeTransformer):
-    def __init__(self, source, *, data, volume=0.5):
-        super().__init__(source, volume)
-
-        self.data = data
-
-        self.title = data.get('title')
-        self.url = data.get('url')
-
-    @classmethod
-    async def from_url(cls, url, *, loop=None, stream=False):
-        loop = loop or asyncio.get_event_loop()
-        data = await loop.run_in_executor(None, lambda: ytdl.extract_info(url, download=not stream))
-
-        if 'entries' in data:
-            # take first item from a playlist
-            data = data['entries'][0]
-
-        filename = data['url'] if stream else ytdl.prepare_filename(data)
-        return cls(discord.FFmpegPCMAudio(filename, **ffmpeg_options), data=data)
+# ytdl = youtube_dl.YoutubeDL(ytdl_format_options)
 
 
-class Music(commands.Cog):
-    def __init__(self, bot):
-        self.bot = bot
+# class YTDLSource(discord.PCMVolumeTransformer):
+#     def __init__(self, source, *, data, volume=0.5):
+#         super().__init__(source, volume)
 
-    @bot.command()
-    async def join(self, ctx, *, channel: discord.VoiceChannel):
-        """Joins a voice channel"""
+#         self.data = data
 
-        if ctx.voice_client is not None:
-            return await ctx.voice_client.move_to(channel)
+#         self.title = data.get('title')
+#         self.url = data.get('url')
 
-        await channel.connect()
+#     @classmethod
+#     async def from_url(cls, url, *, loop=None, stream=False):
+#         loop = loop or asyncio.get_event_loop()
+#         data = await loop.run_in_executor(None, lambda: ytdl.extract_info(url, download=not stream))
 
-    @bot.command()
-    async def play(self, ctx, *, query):
-        """Plays a file from the local filesystem"""
+#         if 'entries' in data:
+#             # take first item from a playlist
+#             data = data['entries'][0]
 
-        source = discord.PCMVolumeTransformer(discord.FFmpegPCMAudio(query))
-        ctx.voice_client.play(source, after=lambda e: print(f'Player error: {e}') if e else None)
+#         filename = data['url'] if stream else ytdl.prepare_filename(data)
+#         return cls(discord.FFmpegPCMAudio(filename, **ffmpeg_options), data=data)
 
-        await ctx.send(f'Now playing: {query}')
 
-    @bot.command()
-    async def yt(self, ctx, *, url):
-        """Plays from a url (almost anything youtube_dl supports)"""
+# class Music(commands.Cog):
+#     def __init__(self, bot):
+#         self.bot = bot
 
-        async with ctx.typing():
-            player = await YTDLSource.from_url(url, loop=self.bot.loop)
-            ctx.voice_client.play(player, after=lambda e: print(f'Player error: {e}') if e else None)
+#     @bot.command()
+#     async def join(self, ctx, *, channel: discord.VoiceChannel):
+#         """Joins a voice channel"""
 
-        await ctx.send(f'Now playing: {player.title}')
+#         if ctx.voice_client is not None:
+#             return await ctx.voice_client.move_to(channel)
 
-    @bot.command()
-    async def stream(self, ctx, *, url):
-        """Streams from a url (same as yt, but doesn't predownload)"""
+#         await channel.connect()
 
-        async with ctx.typing():
-            player = await YTDLSource.from_url(url, loop=self.bot.loop, stream=True)
-            ctx.voice_client.play(player, after=lambda e: print(f'Player error: {e}') if e else None)
+#     @bot.command()
+#     async def play(self, ctx, *, query):
+#         """Plays a file from the local filesystem"""
 
-        await ctx.send(f'Now playing: {player.title}')
+#         source = discord.PCMVolumeTransformer(discord.FFmpegPCMAudio(query))
+#         ctx.voice_client.play(source, after=lambda e: print(f'Player error: {e}') if e else None)
 
-    @bot.command()
-    async def volume(self, ctx, volume: int):
-        """Changes the player's volume"""
+#         await ctx.send(f'Now playing: {query}')
 
-        if ctx.voice_client is None:
-            return await ctx.send("Not connected to a voice channel.")
+#     @bot.command()
+#     async def yt(self, ctx, *, url):
+#         """Plays from a url (almost anything youtube_dl supports)"""
 
-        ctx.voice_client.source.volume = volume / 100
-        await ctx.send(f"Changed volume to {volume}%")
+#         async with ctx.typing():
+#             player = await YTDLSource.from_url(url, loop=self.bot.loop)
+#             ctx.voice_client.play(player, after=lambda e: print(f'Player error: {e}') if e else None)
 
-    @bot.command()
-    async def stop(self, ctx):
-        """Stops and disconnects the bot from voice"""
+#         await ctx.send(f'Now playing: {player.title}')
 
-        await ctx.voice_client.disconnect()
+#     @bot.command()
+#     async def stream(self, ctx, *, url):
+#         """Streams from a url (same as yt, but doesn't predownload)"""
 
-    @play.before_invoke
-    @yt.before_invoke
-    @stream.before_invoke
-    async def ensure_voice(self, ctx):
-        if ctx.voice_client is None:
-            if ctx.author.voice:
-                await ctx.author.voice.channel.connect()
-            else:
-                await ctx.send("You are not connected to a voice channel.")
-                raise commands.CommandError("Author not connected to a voice channel.")
-        elif ctx.voice_client.is_playing():
-            ctx.voice_client.stop() 
+#         async with ctx.typing():
+#             player = await YTDLSource.from_url(url, loop=self.bot.loop, stream=True)
+#             ctx.voice_client.play(player, after=lambda e: print(f'Player error: {e}') if e else None)
+
+#         await ctx.send(f'Now playing: {player.title}')
+
+#     @bot.command()
+#     async def volume(self, ctx, volume: int):
+#         """Changes the player's volume"""
+
+#         if ctx.voice_client is None:
+#             return await ctx.send("Not connected to a voice channel.")
+
+#         ctx.voice_client.source.volume = volume / 100
+#         await ctx.send(f"Changed volume to {volume}%")
+
+#     @bot.command()
+#     async def stop(self, ctx):
+#         """Stops and disconnects the bot from voice"""
+
+#         await ctx.voice_client.disconnect()
+
+#     @play.before_invoke
+#     @yt.before_invoke
+#     @stream.before_invoke
+#     async def ensure_voice(self, ctx):
+#         if ctx.voice_client is None:
+#             if ctx.author.voice:
+#                 await ctx.author.voice.channel.connect()
+#             else:
+#                 await ctx.send("You are not connected to a voice channel.")
+#                 raise commands.CommandError("Author not connected to a voice channel.")
+#         elif ctx.voice_client.is_playing():
+#             ctx.voice_client.stop() 
 
 #Gets the bot's key from the environment variable
 #Note - make sure to mention this is so we can keep code open source without issues of security
