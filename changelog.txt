@@ -12,3 +12,12 @@ Edit:
     - moved TODO to the top of main.py
     - changed TODO to comment block instead of many single line comments
     - fixed issue with the bot's token not being correct
+
+Edit:
+  Date: 29/03/2022
+  Edited by:  Lewis
+  Summary of changes:
+    - Separated code into more organised sections after learning about cogs
+    - Removed triggers which resulted in no commands working
+    - Created TODO.txt to clean up main.py
+    -
